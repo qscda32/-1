@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36616.10 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "计算机博弈", "计算机博弈.vcxproj", "{91836C63-E06B-44E6-A79E-7F972A57AC7B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{91836C63-E06B-44E6-A79E-7F972A57AC7B}.Debug|x64.ActiveCfg = Debug|x64
+		{91836C63-E06B-44E6-A79E-7F972A57AC7B}.Debug|x64.Build.0 = Debug|x64
+		{91836C63-E06B-44E6-A79E-7F972A57AC7B}.Debug|x86.ActiveCfg = Debug|Win32
+		{91836C63-E06B-44E6-A79E-7F972A57AC7B}.Debug|x86.Build.0 = Debug|Win32
+		{91836C63-E06B-44E6-A79E-7F972A57AC7B}.Release|x64.ActiveCfg = Release|x64
+		{91836C63-E06B-44E6-A79E-7F972A57AC7B}.Release|x64.Build.0 = Release|x64
+		{91836C63-E06B-44E6-A79E-7F972A57AC7B}.Release|x86.ActiveCfg = Release|Win32
+		{91836C63-E06B-44E6-A79E-7F972A57AC7B}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {14F1DF6A-6B09-43AC-ABF9-A6A67A77B43A}
+	EndGlobalSection
+EndGlobal
