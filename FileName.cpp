@@ -29,6 +29,9 @@ int search_count;  // 搜索次数
 
 int board[SIZE][SIZE] = { 0 };  // 我方1，对方-1，空白0
 
+bool swap_requested = false;  // 是否请求换手
+bool swapped = false;  // 是否已经换手
+
 // 棋型评估分数
 struct ShapeScore {
     int score;
@@ -61,6 +64,41 @@ void initPositions() {
             all_positions.insert({ i, j });
         }
     }
+}
+
+// 交换棋子颜色
+void swapSides() {
+    swap(list1, list2);
+
+    // 更新board数组
+    memset(board, 0, sizeof(board));
+    for (auto& pt : list1) {
+        board[pt.first][pt.second] = 1;
+    }
+    for (auto& pt : list2) {
+        board[pt.first][pt.second] = -1;
+    }
+
+    swapped = true;
+}
+
+// 判断是否应该换手
+bool shouldSwap(int n, int x, int y) {
+    // 只有第一回合且后手时才考虑换手
+    if (n != 1 || swapped || swap_requested) return false;
+
+    // 对方第一步下在天元(7,7)
+    if (x == 7 && y == 7) {
+        return true;
+    }
+
+    return false;
+}
+
+// 执行换手操作
+void performSwap() {
+    swapSides();
+    swap_requested = true;
 }
 
 // 检查是否有邻居
@@ -363,7 +401,6 @@ pair<int, int> ai() {
 
     return next_point;
 }
-
 int main()
 {
 	int x, y, n;
@@ -391,10 +428,25 @@ int main()
 
 	/************************************************************************************/
 	/***********在下面填充你的代码，决策结果（本方将落子的位置）存入new_x和new_y中****************/
-  
-    pair<int, int> decision = ai();
-    int new_x = decision.first;
-    int new_y = decision.second;
+    int new_x, new_y;
+
+    // 判断是否需要换手
+    if (shouldSwap(n, x, y)) {
+        // 执行换手操作
+        performSwap();
+        // 换手后，我方变成先手，需要下第一步
+        // 这里可以由AI决定第一步的位置
+        pair<int, int> decision = ai();
+        new_x = decision.first;
+        new_y = decision.second;
+    }
+    else {
+        // 正常AI决策
+        pair<int, int> decision = ai();
+        new_x = decision.first;
+        new_y = decision.second;
+    }
+
 	/***********在上方填充你的代码，决策结果（本方将落子的位置）存入new_x和new_y中****************/
 	/************************************************************************************/
 
