@@ -10,14 +10,15 @@
 #include <map>
 #include <set>
 #include <tuple>
+#include <cstring>
 using namespace std;
 
 const int COLUMN = 15;
 const int ROW = 15;
 const int SIZE = 15;
 
-vector<pair<int, int>> list1;  // AI棋子（我方）
-vector<pair<int, int>> list2;  // 人类棋子（对方）
+vector<pair<int, int>> list1;  // AI棋子（未换手时为黑棋）
+vector<pair<int, int>> list2;  // 对手棋子（未换手时为白棋）
 vector<pair<int, int>> list3;  // 所有棋子
 set<pair<int, int>> all_positions;  // 所有棋盘位置
 pair<int, int> next_point;  // AI下一步位置
@@ -27,12 +28,13 @@ int depth = 3;  // 搜索深度
 int cut_count;  // 剪枝次数
 int search_count;  // 搜索次数
 
-int board[SIZE][SIZE] = { 0 };  // 我方1，对方-1，空白0
+int board[SIZE][SIZE] = { 0 };  // 黑棋:1, 白棋:-1, 空白:0
 
-bool swap_requested = false;  // 是否请求换手
-bool swapped = false;  // 是否已经换手
+bool swapped = false;  // 是否已换手
+bool swap_decision_made = false;  // 是否已做出换手决定
+int total_moves = 0;  // 棋盘上的总棋子数
 
-// 棋型评估分数
+// 棋型评分结构
 struct ShapeScore {
     int score;
     vector<int> shape;
@@ -66,11 +68,10 @@ void initPositions() {
     }
 }
 
-// 交换棋子颜色
+// 交换双方棋子
 void swapSides() {
     swap(list1, list2);
 
-    // 更新board数组
     memset(board, 0, sizeof(board));
     for (auto& pt : list1) {
         board[pt.first][pt.second] = 1;
@@ -82,26 +83,91 @@ void swapSides() {
     swapped = true;
 }
 
-// 判断是否应该换手
-bool shouldSwap(int n, int x, int y) {
-    // 只有第一回合且后手时才考虑换手
-    if (n != 1 || swapped || swap_requested) return false;
+// 判断是否应该考虑换手
+// 在第三手后（白棋下完第一步后），黑棋已有2子，白棋有1子
+// 白棋可以选择是否换手
+bool shouldConsiderSwap(int n, int last_x, int last_y) {
+    // 已经换手或已经做出决定
+    if (swapped || swap_decision_made) return false;
 
-    // 对方第一步下在天元(7,7)
-    if (x == 7 && y == 7) {
+    // 第三手后（棋盘上有3个棋子：2黑1白）
+    if (total_moves == 3) {
         return true;
     }
 
     return false;
 }
 
-// 执行换手操作
-void performSwap() {
-    swapSides();
-    swap_requested = true;
+// 评估是否应该换手
+// 返回true表示白棋（当前AI）应该换手
+bool evaluateSwap() {
+    int my_score = 0;   // 我方（白棋）得分
+    int opp_score = 0;  // 敌方（黑棋）得分
+
+    // 快速评估当前棋盘局势
+    vector<tuple<int, vector<pair<int, int>>, pair<int, int>>> score_all_arr;
+
+    // 计算白棋得分（未换手时的AI）
+    for (auto& pt : list2) {
+        int m = pt.first, n = pt.second;
+        // 简化版的换手决策评分
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                if (dx == 0 && dy == 0) continue;
+                int cnt = 1;
+                for (int k = 1; k <= 4; k++) {
+                    int nx = m + dx * k, ny = n + dy * k;
+                    if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE &&
+                        find(list2.begin(), list2.end(), make_pair(nx, ny)) != list2.end()) {
+                        cnt++;
+                    }
+                    else break;
+                }
+                if (cnt >= 3) my_score += cnt * cnt;
+            }
+        }
+    }
+
+    // 计算黑棋得分（未换手时的对手）
+    for (auto& pt : list1) {
+        int m = pt.first, n = pt.second;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                if (dx == 0 && dy == 0) continue;
+                int cnt = 1;
+                for (int k = 1; k <= 4; k++) {
+                    int nx = m + dx * k, ny = n + dy * k;
+                    if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE &&
+                        find(list1.begin(), list1.end(), make_pair(nx, ny)) != list1.end()) {
+                        cnt++;
+                    }
+                    else break;
+                }
+                if (cnt >= 3) opp_score += cnt * cnt;
+            }
+        }
+    }
+
+    // 如果对手（黑棋）形势更好，则换手
+    // 或者如果己方形势明显较弱，也换手
+    return opp_score > my_score + 5;
 }
 
-// 检查是否有邻居
+// 执行换手决定
+bool makeSwapDecision() {
+    if (!shouldConsiderSwap(total_moves, 0, 0)) return false;
+
+    swap_decision_made = true;
+
+    if (evaluateSwap()) {
+        swapSides();
+        return true;
+    }
+
+    return false;
+}
+
+// 检查是否有相邻棋子
 bool hasNeighbor(pair<int, int> pt) {
     for (int i = -1; i <= 1; i++) {
         for (int j = -1; j <= 1; j++) {
@@ -133,7 +199,7 @@ int calScore(int m, int n, int x_direct, int y_direct,
         }
     }
 
-    // 查找形状
+    // 查找棋型
     for (int offset = -5; offset <= 0; offset++) {
         vector<int> pos;
         for (int i = 0; i < 6; i++) {
@@ -142,20 +208,20 @@ int calScore(int m, int n, int x_direct, int y_direct,
             pair<int, int> pt = { x, y };
 
             if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) {
-                pos.push_back(3); // 边界标记
+                pos.push_back(3);  // 边界标记
             }
             else if (find(enemy_list.begin(), enemy_list.end(), pt) != enemy_list.end()) {
-                pos.push_back(2);
+                pos.push_back(2);  // 敌方棋子
             }
             else if (find(my_list.begin(), my_list.end(), pt) != my_list.end()) {
-                pos.push_back(1);
+                pos.push_back(1);  // 我方棋子
             }
             else {
-                pos.push_back(0);
+                pos.push_back(0);  // 空白
             }
         }
 
-        // 跳过包含边界的形状
+        // 跳过包含边界的棋型
         bool has_boundary = false;
         for (int p : pos) {
             if (p == 3) {
@@ -183,7 +249,7 @@ int calScore(int m, int n, int x_direct, int y_direct,
         }
     }
 
-    // 计算相交得分
+    // 计算相交得分（两个棋型重叠加分）
     if (!get<1>(max_score_shape).empty()) {
         for (auto& item : score_all_arr) {
             for (auto& pt1 : get<1>(item)) {
@@ -233,7 +299,7 @@ int evaluation(bool is_ai) {
     return total_score;
 }
 
-// 搜索顺序排序
+// 搜索顺序排序（优先搜索上一步的邻居位置）
 void order(vector<pair<int, int>>& blank_list) {
     if (list3.empty()) return;
     pair<int, int> last_pt = list3.back();
@@ -294,7 +360,7 @@ bool gameWin(vector<pair<int, int>>& list) {
                 if (win) return true;
             }
 
-            // 正对角线
+            // 正对角线方向
             if (m <= SIZE - 5 && n <= SIZE - 5) {
                 bool win = true;
                 for (int k = 1; k <= 4; k++) {
@@ -306,7 +372,7 @@ bool gameWin(vector<pair<int, int>>& list) {
                 if (win) return true;
             }
 
-            // 反对角线
+            // 反对角线方向
             if (m <= SIZE - 5 && n >= 4) {
                 bool win = true;
                 for (int k = 1; k <= 4; k++) {
@@ -322,8 +388,9 @@ bool gameWin(vector<pair<int, int>>& list) {
     return false;
 }
 
-// 负值极大搜索
+// 负值极大搜索（带Alpha-Beta剪枝）
 int negamax(bool is_ai, int depth_left, int alpha, int beta) {
+    // 游戏结束或达到搜索深度
     if (gameWin(list1) || gameWin(list2) || depth_left == 0) {
         return evaluation(is_ai);
     }
@@ -367,6 +434,7 @@ int negamax(bool is_ai, int depth_left, int alpha, int beta) {
                 next_point = next_step;
             }
 
+            // Alpha-Beta剪枝
             if (value >= beta) {
                 cut_count++;
                 return beta;
@@ -378,19 +446,19 @@ int negamax(bool is_ai, int depth_left, int alpha, int beta) {
     return alpha;
 }
 
-// AI决策
+// AI决策函数
 pair<int, int> ai() {
     cut_count = 0;
     search_count = 0;
     next_point = { -1, -1 };
     negamax(true, depth, -99999999, 99999999);
 
-    // 如果没有找到合适的位置（开局时），返回中心点
+    // 开局时下天元
     if (next_point.first == -1 && list3.empty()) {
         next_point = { 7, 7 };
     }
+    // 如果没有找到合适位置，下第一个空白位置
     else if (next_point.first == -1) {
-        // 返回第一个空白位置
         for (auto& pos : all_positions) {
             if (find(list3.begin(), list3.end(), pos) == list3.end()) {
                 next_point = pos;
@@ -401,56 +469,62 @@ pair<int, int> ai() {
 
     return next_point;
 }
-int main()
-{
-	int x, y, n;
-	//恢复目前的棋盘信息
+
+int main() {
+    int x, y, n;
+
     initPositions();
-	cin >> n;
-	for (int i = 0; i < n - 1; i++) {
-        cin >> x >> y; if (x != -1) { board[x][y] = -1; 
-        list2.push_back({ x, y });
-        list3.push_back({ x, y });
-        }	//对方
-        cin >> x >> y; if (x != -1) { board[x][y] = 1; 
-        list1.push_back({ x, y });
-        list3.push_back({ x, y });
-        }	//我方
-	}
-	cin >> x >> y;
+
+    // 读取当前棋盘信息
+    cin >> n;
+
+    // 读取历史落子
+    for (int i = 0; i < n - 1; i++) {
+        cin >> x >> y;
+        if (x != -1) {
+            board[x][y] = -1;  // 白棋
+            list2.push_back({ x, y });
+            list3.push_back({ x, y });
+            total_moves++;
+        }
+        cin >> x >> y;
+        if (x != -1) {
+            board[x][y] = 1;   // 黑棋
+            list1.push_back({ x, y });
+            list3.push_back({ x, y });
+            total_moves++;
+        }
+    }
+
+    // 读取对方最近一步
+    cin >> x >> y;
     if (x != -1) {
-        board[x][y] = -1;
+        board[x][y] = -1;  // 白棋
         list2.push_back({ x, y });
         list3.push_back({ x, y });
-    }	//对方
+        total_moves++;
+    }
 
-	//此时board[][]里存储的就是当前棋盘的所有棋子信息,x和y存的是对方最近一步下的棋
-
-	/************************************************************************************/
-	/***********在下面填充你的代码，决策结果（本方将落子的位置）存入new_x和new_y中****************/
     int new_x, new_y;
 
-    // 判断是否需要换手
-    if (shouldSwap(n, x, y)) {
-        // 执行换手操作
-        performSwap();
-        // 换手后，我方变成先手，需要下第一步
-        // 这里可以由AI决定第一步的位置
-        pair<int, int> decision = ai();
-        new_x = decision.first;
-        new_y = decision.second;
-    }
-    else {
-        // 正常AI决策
-        pair<int, int> decision = ai();
-        new_x = decision.first;
-        new_y = decision.second;
+    // 检查是否需要做出换手决定
+    // 标准规则：白棋在黑棋第三手后（总棋子数==3）可以选择换手
+    if (shouldConsiderSwap(n, x, y)) {
+        if (makeSwapDecision()) {
+            // 换手成功，AI变为黑棋，需要下下一步
+            // 输出-1 -1表示换手
+            printf("-1 -1\n");
+            return 0;
+        }
     }
 
-	/***********在上方填充你的代码，决策结果（本方将落子的位置）存入new_x和new_y中****************/
-	/************************************************************************************/
+    // 正常AI决策
+    pair<int, int> decision = ai();
+    new_x = decision.first;
+    new_y = decision.second;
 
-	// 向平台输出决策结果
-	printf("%d %d\n", new_x, new_y);
-	return 0;
+    // 输出决策结果
+    printf("%d %d\n", new_x, new_y);
+
+    return 0;
 }
