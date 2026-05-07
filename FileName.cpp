@@ -161,51 +161,36 @@ int evaluateDirection(int x, int y, int dir, int player) {
         }
     }
 
-    // 滑动窗口匹配（长度为5和6）
-    for (int i = 0; i <= (int)line.size() - 5; i++) {
-        bool has_boundary = false;
-        vector<int> pattern5(line.begin() + i, line.begin() + i + 5);
+    // 按连续段扫描，每个段只计分一次
+    for (int i = 0; i < (int)line.size(); i++) {
+        if (line[i] != 1) continue;
 
-        // 检查是否包含边界
-        for (int p : pattern5) {
-            if (p == 3) {
-                has_boundary = true;
+        int len = 0;
+        while (i + len < (int)line.size() && line[i + len] == 1)
+            len++;
+
+        int left = (i - 1 >= 0) ? line[i - 1] : 3;
+        int right = (i + len < (int)line.size()) ? line[i + len] : 3;
+
+        // 构造标准棋型
+        vector<int> shape;
+        if (left == 0) shape.push_back(0);
+        for (int k = 0; k < len; k++) shape.push_back(1);
+        if (right == 0) shape.push_back(0);
+
+        // 匹配棋型
+        for (auto& p : patterns) {
+            if (shape == p.shape) {
+                score += p.score;
                 break;
             }
         }
-        if (!has_boundary) {
-            for (auto& p : patterns) {
-                if (p.shape.size() == 5 && pattern5 == p.shape) {
-                    score += p.score;
-                    break;
-                }
-            }
-        }
 
-        // 检查6子棋型
-        if (i <= (int)line.size() - 6) {
-            vector<int> pattern6(line.begin() + i, line.begin() + i + 6);
-            has_boundary = false;
-            for (int p : pattern6) {
-                if (p == 3) {
-                    has_boundary = true;
-                    break;
-                }
-            }
-            if (!has_boundary) {
-                for (auto& p : patterns) {
-                    if (p.shape.size() == 6 && pattern6 == p.shape) {
-                        score += p.score;
-                        break;
-                    }
-                }
-            }
-        }
+        i += len - 1; // 跳过已处理的连续段
     }
 
     return score;
 }
-
 // 评估单个位置
 int evaluatePosition(int x, int y, int player) {
     if (board[x][y] != 0) return 0;
@@ -280,7 +265,7 @@ int evaluateBoard() {
     if (cached_black_score != -1 && cached_white_score != -1) {
         int ai_score = (ai_player == 1) ? cached_black_score : cached_white_score;
         int opp_score = (ai_player == 1) ? cached_white_score : cached_black_score;
-        return ai_score - (int)(opp_score * attack_ratio);
+        return (int)(ai_score * attack_ratio) - opp_score;
     }
 
     int black_score = 0;
@@ -316,9 +301,8 @@ int evaluateBoard() {
     int ai_score = (ai_player == 1) ? black_score : white_score;
     int opp_score = (ai_player == 1) ? white_score : black_score;
 
-    return ai_score - (int)(opp_score * attack_ratio);
+    return (int)(ai_score * attack_ratio) - opp_score;
 }
-
 // 生成候选位置（优化版）
 vector<pair<int, int>> generateMoves() {
     vector<pair<int, int>> moves;
@@ -418,15 +402,6 @@ bool makeSwapDecision() {
 // 负值极大搜索（带Alpha-Beta剪枝和超时控制）
 int negamax(int depth_left, int alpha, int beta, bool is_ai) {
     if (isTimeOut()) return 0;
-
-    // 检查当前局面是否已经胜利（上一步对手是否赢了）
-    if (!all_list.empty()) {
-        auto& last = all_list.back();
-        int last_player = board[last.first][last.second];
-        if (checkWin(last.first, last.second, last_player)) {
-            return (last_player == ai_player) ? WIN_SCORE - depth_left : -WIN_SCORE + depth_left;
-        }
-    }
 
     // 达到搜索深度
     if (depth_left == 0) {
